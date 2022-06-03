@@ -5,7 +5,10 @@ Por Hiago Moura
 #define pinReleLampada 7 // Pino no qual o módulo relé está conectado a lampada.
 #define pinReleMotor 6   // Pino no qual o módulo relé está conectado ao motor.
 #define pinLDR A0        // Pino do LDR
+#define pinTMP36 A3		 // Pino do TMP36
+#define pinPIR 13
 #define nivelLuz 500     // Nivel de luz de referencia
+#define nivelTemperatura 35 // Nivel de temperatura de referencia
 
 String comando;      // Variável para ler os dados recebidos pela serial
 bool escuro = false; // Variável que recebe resultado da comparação da luz atual no ambiente captada pelo sensor em relação ao valor de referencia.
@@ -25,6 +28,7 @@ void setup()
   Serial.begin(9600);                // Inicializa a comunicação serial em 9600bps
   pinMode(pinReleLampada, OUTPUT);   // Seta o pino do relé da lampada como saída.
   pinMode(pinReleMotor, OUTPUT);     // Seta o pino do relé do Motor como saída.
+  pinMode(pinPIR,INPUT);			 // Seta o pino do sensor de presença PIR como entrada.
   digitalWrite(pinReleLampada, LOW); // Seta o pino do relé da lampada com nível lógico baixo.
   digitalWrite(pinReleMotor, LOW);   // Seta o pino do relé do motor com nível lógico baixo.
 }
@@ -37,6 +41,8 @@ void loop()
     // Se o modo automático estiver habilitado (true), todos os sensores devem ser habilitados, e portanto serem considerados na programação.
 
     // Habilitando todos os sensores:
+    
+    bool presencaDetectada = digitalRead(pinPIR);
 
     // Habilitando Sensor de Luz (LDR)
 
@@ -46,7 +52,7 @@ void loop()
     Serial.print("Nivel de luz LDR: ");
     Serial.println(valorLDR);
 
-    if (escuro)
+    if (escuro && presencaDetectada)
     {
       digitalWrite(pinReleLampada, HIGH); // Aciona o pino do relé disparando o mesmo. (NF ---> NA), ou seja, ligando a lampada.
     }
@@ -54,6 +60,31 @@ void loop()
     {
       digitalWrite(pinReleLampada, LOW); // Desaciona o pino do relé (NA ---> NF), ou seja, desligando a lampada.
     }
+    
+    // Habilitando Sensor de Temperatura
+    
+    float valorTMP36 = analogRead(A3);
+    
+    float tensaoTMP36 = 5 * valorTMP36/1023;//Realizando conversão do valor digital de entrada da porta A3 (0 - 1023) vinda do ADC do Arduino, para um valor analógico de tensão em V.
+    
+    Serial.print("Valor de tensao TMP36: ");
+    Serial.print(tensaoTMP36);
+    Serial.println(" V");
+    
+    float temperatura = (tensaoTMP36 - 0.5) * 100;
+    Serial.print("Nivel de temperatura TMP36: ");
+    Serial.print(temperatura);
+    Serial.println(" Celsius");
+    
+    bool calor = temperatura >= nivelTemperatura;
+    
+    if(calor && presencaDetectada){
+      digitalWrite(pinReleMotor, HIGH); // Ligo o motor.
+    }
+    else{
+      digitalWrite(pinReleMotor, LOW);
+    }
+    
   }
 
   if (Serial.available())
@@ -67,7 +98,15 @@ void loop()
     {
       // DMA - Desabilitar Modo Automático - Todos os sensores desabilitados.
       modoAutomatico = false;
+      
+      //Desabilitando pino do relé da lampada.
+      digitalWrite(pinReleLampada, LOW); // Desaciona o pino do relé (NA ---> NF), ou seja, desligando a lampada.
+      
+      //Desabilitando pino do relé do motor.
+      digitalWrite(pinReleMotor, LOW);
+      
       Serial.println("Modo automatico foi desabilitado, todos os sensores foram desabilitados (OFF).");
+      
     }
     else if (comando == "HMA")
     {
